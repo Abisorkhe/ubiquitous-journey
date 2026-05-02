@@ -1,0 +1,39 @@
+name: Download YouTube 21.16.240 (Universal APK)
+
+on: workflow_dispatch
+
+permissions:
+  contents: write
+
+jobs:
+  youtube:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download YouTube APK
+        id: apk
+        uses: Kingsman44/gh-apkmirror-dl@v2.0
+        with:
+          org: google-inc
+          repo: youtube
+          version: '21.16.240'
+          bundle: false
+          filename: 'YouTube-${version}.apk'
+          overwrite: true
+          DEBUG: true
+
+      - name: Show metadata
+        run: |
+          echo "Filename: ${{ steps.apk.outputs.filename }}"
+          echo "Architecture: ${{ steps.apk.outputs.arch }}"
+          echo "DPI: ${{ steps.apk.outputs.dpi }}"
+          echo "Version: ${{ steps.apk.outputs.version }}"
+
+      - name: Commit APK
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add "${{ steps.apk.outputs.filename }}"
+          git commit -m "Add YouTube ${{ steps.apk.outputs.filename }}" || echo "No changes to commit"
+          git push
