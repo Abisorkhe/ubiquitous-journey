@@ -1,0 +1,85 @@
+name: 📦 دانلود یوتیوب 21.16.240 و ذخیره‌ی تکه‌تکه
+
+on:
+  workflow_dispatch:
+    inputs:
+      password:
+        description: '🔐 رمز فایل فشرده (اختیاری)'
+        required: false
+        type: string
+        default: ''
+      split_size:
+        description: '📦 حجم هر تکه (پیش‌فرض: 95m)'
+        required: false
+        type: string
+        default: '95m'
+
+permissions:
+  contents: write
+
+jobs:
+  download-and-split:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 🔄 دریافت کد مخزن
+        uses: actions/checkout@v4
+
+      - name: ⚙️ نصب ابزارها
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y p7zip-full file
+
+      - name: 📥 دانلود یوتیوب با gh-apkmirror-dl
+        id: apk
+        uses: Kingsman44/gh-apkmirror-dl@v2.0
+        with:
+          org: google-inc
+          repo: youtube
+          version: '20.47.62'
+          bundle: false                     # APK معمولی
+          # از آنجا که نسخه universal است، فیلتر arch و dpi را حذف می‌کنیم
+          filename: 'YouTube-${version}.apk'
+          overwrite: true
+          DEBUG: false                      # در صورت نیاز true کنید
+
+      - name: 🧠 تشخیص دسته و نام اصلی
+        run: |
+          # نام فایل خروجی اکشن (همان YouTube-21.16.240.apk)
+          FILENAME="${{ steps.apk.outputs.filename }}"
+          # نام پایه بدون پسوند برای پوشه
+          BASENAME_NOEXT="${FILENAME%.*}"
+          FOLDER_NAME=$(echo "$BASENAME_NOEXT" | sed 's/[\\/:*?"<>|]/_/g')
+          # نام امن برای فایل درون آرشیو (با پسوند)
+          SAFE_FILENAME=$(echo "$FILENAME" | sed 's/[\\/:*?"<>|]/_/g')
+
+          # تشخیص دسته (APK در دسته‌ی other یا app می‌رود)
+          CAT="app"   # می‌توانید other هم بگذارید
+
+          echo "CAT=$CAT" >> $GITHUB_ENV
+          echo "FOLDER_NAME=$FOLDER_NAME" >> $GITHUB_ENV
+          echo "SAFE_FILENAME=$SAFE_FILENAME" >> $GITHUB_ENV
+          echo "✅ دسته: $CAT → زیرپوشه: $FOLDER_NAME"
+          echo "📄 نام فایل اصلی: $SAFE_FILENAME"
+
+      - name: 🗜️ فشرده‌سازی و تقسیم (با اعمال رمز)
+        run: |
+          FINAL_DIR="downloads/${{ env.CAT }}/${{ env.FOLDER_NAME }}"
+          mkdir -p "$FINAL_DIR"
+          rm -f "$FINAL_DIR"/*.7z*
+
+          if [ -z "${{ github.event.inputs.password }}" ]; then
+            7z a -mhe=on -mx=3 -v${{ github.event.inputs.split_size }} "$FINAL_DIR/archive.7z" "./${{ env.SAFE_FILENAME }}"
+          else
+            7z a -p"${{ github.event.inputs.password }}" -mhe=on -mx=3 -v${{ github.event.inputs.split_size }} "$FINAL_DIR/archive.7z" "./${{ env.SAFE_FILENAME }}"
+          fi
+
+          echo "✅ پوشه: $FINAL_DIR"
+          ls -lh "$FINAL_DIR"
+
+      - name: 📝 کامیت و پوش قطعات
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add downloads/
+          git commit -m "Add YouTube 21.16.240 (split archive)" || echo "Nothing to commit"
+          git pushnam
